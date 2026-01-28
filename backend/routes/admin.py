@@ -1,174 +1,167 @@
 """
 Admin Routes
-Handles company verification, job drive management, student management
+Handles company approval, job drive management, student management
 """
 
 from flask import Blueprint, request, jsonify
+from models import db, Admin, Company, JobDrive, StudentMaster, Application
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
-from models import User, Admin, Company, Student, JobDrive, Application
+from functools import wraps
 from datetime import datetime
-from sqlalchemy import and_, or_
 
 admin_bp = Blueprint('admin', __name__)
 
-def require_admin(fn):
-    """Decorator to ensure user is an admin"""
+def require_admin(f):
+    """Decorator to require admin role"""
+    @wraps(f)
     @jwt_required()
-    def wrapper(*args, **kwargs):
+    def decorated_function(*args, **kwargs):
         identity = get_jwt_identity()
         if identity.get('role') != 'admin':
             return jsonify({'error': 'Admin access required'}), 403
-        return fn(*args, **kwargs)
-    wrapper.__name__ = fn.__name__
-    return wrapper
-
-# ==================== COMPANY MANAGEMENT ====================
+        return f(*args, **kwargs)
+    return decorated_function
 
 @admin_bp.route('/companies', methods=['GET'])
 @require_admin
 def get_companies():
-    """
-    Get all companies with optional filtering
-    Query params: ?status=pending|approved|rejected
-    """
+    """Get all companies with filtering"""
     try:
-        status = request.args.get('status')
+        status_filter = request.args.get('status')  # 'Pending Approval', 'Approved', 'Rejected'
         
         query = Company.query
-        if status:
-            query = query.filter_by(verification_status=status)
+        if status_filter:
+            query = query.filter_by(status=status_filter)
         
-        companies = query.all()
+        companies = query.order_by(Company.registered_at.desc()).all()
         
-        result = [{
-            'id': c.id,
-            'company_name': c.company_name,
-            'hr_name': c.hr_name,
-            'hr_email': c.hr_email,
-            'hr_phone': c.hr_phone,
-            'industry': c.industry,
-            'website': c.website,
-            'verification_status': c.verification_status,
-            'verification_date': c.verification_date.isoformat() if c.verification_date else None
-        } for c in companies]
+        companies_list = []
+        for company in companies:
+            companies_list.append({
+                'company_id': company.company_id,
+                'company_name': company.company_name,
+                'official_email': company.official_email,
+                'company_website': company.company_website,
+                'industry_type': company.industry_type,
+                'company_size': company.company_size,
+                'hr_name': company.hr_name,
+                'hr_email': company.hr_email,
+                'hr_contact_number': company.hr_contact_number,
+                'city': company.city,
+                'status': company.status,
+                'is_verified_by_admin': company.is_verified_by_admin,
+                'registered_at': company.registered_at.isoformat() if company.registered_at else None
+            })
         
-        return jsonify({'companies': result, 'count': len(result)}), 200
+        return jsonify({'companies': companies_list}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Get companies error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch companies'}), 500
 
-@admin_bp.route('/companies/<int:company_id>', methods=['GET'])
+@admin_bp.route('/companies/<company_id>/approve', methods=['POST'])
 @require_admin
-def get_company_details(company_id):
-    """Get detailed information about a specific company"""
+def approve_company(company_id):
+    """Approve or reject a company"""
     try:
+        identity = get_jwt_identity()
+        admin = Admin.query.filter_by(user_id=identity['user_id']).first()
+        if not admin:
+            return jsonify({'error': 'Admin profile not found'}), 404
+        
         company = Company.query.get(company_id)
         if not company:
             return jsonify({'error': 'Company not found'}), 404
         
+        data = request.get_json()
+        action = data.get('action')  # 'approve' or 'reject'
+        
+        if action == 'approve':
+            company.status = 'Approved'
+            company.is_verified_by_admin = True
+            company.approved_by_admin_id = admin.admin_id
+            company.approval_date = datetime.utcnow()
+            company.rejection_reason = None
+            message = f'{company.company_name} has been approved'
+        elif action == 'reject':
+            company.status = 'Rejected'
+            company.is_verified_by_admin = False
+            company.rejection_reason = data.get('reason', 'No reason provided')
+            company.approved_by_admin_id = None
+            company.approval_date = None
+            message = f'{company.company_name} has been rejected'
+        else:
+            return jsonify({'error': 'Invalid action'}), 400
+        
+        db.session.commit()
+        
         return jsonify({
-            'id': company.id,
-            'company_name': company.company_name,
-            'industry': company.industry,
-            'website': company.website,
-            'hr_name': company.hr_name,
-            'hr_email': company.hr_email,
-            'hr_phone': company.hr_phone,
-            'address': company.address,
-            'city': company.city,
-            'state': company.state,
-            'verification_status': company.verification_status,
-            'rejection_reason': company.rejection_reason
+            'message': message,
+            'company': {
+                'company_id': company.company_id,
+                'company_name': company.company_name,
+                'status': company.status
+            }
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@admin_bp.route('/companies/<int:company_id>/approve', methods=['PUT'])
-@require_admin
-def approve_company(company_id):
-    """Approve a company registration"""
-    try:
-        identity = get_jwt_identity()
-        admin = Admin.query.filter_by(user_id=identity['user_id']).first()
-        
-        company = Company.query.get(company_id)
-        if not company:
-            return jsonify({'error': 'Company not found'}), 404
-        
-        company.verification_status = 'approved'
-        company.verified_by_admin_id = admin.id
-        company.verification_date = datetime.utcnow()
-        db.session.commit()
-        
-        return jsonify({'message': 'Company approved successfully'}), 200
-        
-    except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        print(f"Approve company error: {str(e)}")
+        return jsonify({'error': 'Failed to update company status'}), 500
 
-@admin_bp.route('/companies/<int:company_id>/reject', methods=['PUT'])
-@require_admin
-def reject_company(company_id):
-    """Reject a company registration with reason"""
-    try:
-        data = request.get_json()
-        identity = get_jwt_identity()
-        admin = Admin.query.filter_by(user_id=identity['user_id']).first()
-        
-        company = Company.query.get(company_id)
-        if not company:
-            return jsonify({'error': 'Company not found'}), 404
-        
-        company.verification_status = 'rejected'
-        company.rejection_reason = data.get('reason', 'No reason provided')
-        company.verified_by_admin_id = admin.id
-        company.verification_date = datetime.utcnow()
-        db.session.commit()
-        
-        return jsonify({'message': 'Company rejected'}), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-# ==================== JOB DRIVE MANAGEMENT ====================
-
-@admin_bp.route('/jobdrives', methods=['POST'])
+@admin_bp.route('/job-drives', methods=['POST'])
 @require_admin
 def create_job_drive():
-    """
-    Create a new job drive
-    Expects: { "company_id": ..., "drive_name": "...", "job_role": "...", 
-               "package_lpa": ..., "eligible_branches": [...], "min_cgpa": ..., etc. }
-    """
+    """Create a new job drive"""
     try:
-        data = request.get_json()
         identity = get_jwt_identity()
         admin = Admin.query.filter_by(user_id=identity['user_id']).first()
+        if not admin:
+            return jsonify({'error': 'Admin profile not found'}), 404
         
-        # Validate company
-        company = Company.query.get(data.get('company_id'))
-        if not company or company.verification_status != 'approved':
-            return jsonify({'error': 'Invalid or unapproved company'}), 400
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['company_id', 'job_role_title', 'ctc_package']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Verify company exists and is approved
+        company = Company.query.get(data['company_id'])
+        if not company:
+            return jsonify({'error': 'Company not found'}), 404
+        if company.status != 'Approved':
+            return jsonify({'error': 'Company must be approved before creating job drives'}), 400
         
         # Create job drive
         job_drive = JobDrive(
-            company_id=data.get('company_id'),
-            created_by_admin_id=admin.id,
-            drive_name=data.get('drive_name'),
-            job_role=data.get('job_role'),
-            job_description=data.get('job_description', ''),
-            package_lpa=data.get('package_lpa'),
-            package_category=data.get('package_category', 'normal'),
+            company_id=data['company_id'],
+            created_by_admin_id=admin.admin_id,
+            job_role_title=data['job_role_title'],
+            job_description=data.get('job_description'),
+            job_type=data.get('job_type', 'Full-time'),
+            work_mode=data.get('work_mode', 'On-site'),
+            job_locations=data.get('job_locations', []),
+            ctc_package=data['ctc_package'],
+            package_breakup=data.get('package_breakup'),
+            stipend_for_internship=data.get('stipend_for_internship'),
+            bond_details=data.get('bond_details'),
+            eligible_programs=data.get('eligible_programs', []),
             eligible_branches=data.get('eligible_branches', []),
-            eligible_years=data.get('eligible_years', [3, 4]),
-            min_cgpa=data.get('min_cgpa', 0.0),
+            eligible_batch_years=data.get('eligible_batch_years', []),
+            minimum_cgpa=data.get('minimum_cgpa', 0.0),
             max_active_backlogs=data.get('max_active_backlogs', 0),
-            min_tenth_percentage=data.get('min_tenth_percentage'),
-            min_twelfth_percentage=data.get('min_twelfth_percentage'),
-            status='draft'
+            minimum_tenth_percentage=data.get('minimum_tenth_percentage'),
+            minimum_twelfth_percentage=data.get('minimum_twelfth_percentage'),
+            required_skills=data.get('required_skills', []),
+            gender_preference=data.get('gender_preference', 'Any'),
+            drive_status=data.get('drive_status', 'Published'),
+            application_start_date=data.get('application_start_date'),
+            application_end_date=data.get('application_end_date'),
+            drive_conducted_date=data.get('drive_conducted_date'),
+            selection_rounds=data.get('selection_rounds', []),
+            documents_required=data.get('documents_required', [])
         )
         
         db.session.add(job_drive)
@@ -176,291 +169,262 @@ def create_job_drive():
         
         return jsonify({
             'message': 'Job drive created successfully',
-            'job_drive_id': job_drive.id
+            'drive_id': job_drive.drive_id,
+            'job_role_title': job_drive.job_role_title,
+            'company_name': company.company_name
         }), 201
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        print(f"Create job drive error: {str(e)}")
+        return jsonify({'error': 'Failed to create job drive'}), 500
 
-@admin_bp.route('/jobdrives/<int:drive_id>/publish', methods=['PUT'])
+@admin_bp.route('/job-drives', methods=['GET'])
 @require_admin
-def publish_job_drive(drive_id):
-    """
-    Publish a job drive (make it visible to students)
-    Expects: { "application_start_date": "...", "application_end_date": "...", "drive_date": "..." }
-    """
+def get_job_drives():
+    """Get all job drives with filtering"""
     try:
-        data = request.get_json()
-        job_drive = JobDrive.query.get(drive_id)
-        
-        if not job_drive:
-            return jsonify({'error': 'Job drive not found'}), 404
-        
-        job_drive.status = 'published'
-        job_drive.application_start_date = datetime.fromisoformat(data.get('application_start_date'))
-        job_drive.application_end_date = datetime.fromisoformat(data.get('application_end_date'))
-        job_drive.drive_date = datetime.fromisoformat(data.get('drive_date')).date()
-        
-        db.session.commit()
-        
-        return jsonify({'message': 'Job drive published successfully'}), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@admin_bp.route('/jobdrives', methods=['GET'])
-@require_admin
-def get_all_job_drives():
-    """Get all job drives with optional status filter"""
-    try:
+        company_id = request.args.get('company_id')
         status = request.args.get('status')
         
         query = JobDrive.query
+        if company_id:
+            query = query.filter_by(company_id=company_id)
         if status:
-            query = query.filter_by(status=status)
+            query = query.filter_by(drive_status=status)
         
-        drives = query.all()
+        job_drives = query.order_by(JobDrive.created_at.desc()).all()
         
-        result = [{
-            'id': d.id,
-            'drive_name': d.drive_name,
-            'company_name': d.company.company_name,
-            'job_role': d.job_role,
-            'package_lpa': d.package_lpa,
-            'status': d.status,
-            'application_count': d.applications.count(),
-            'created_at': d.created_at.isoformat()
-        } for d in drives]
+        drives_list = []
+        for drive in job_drives:
+            # Get application count
+            app_count = Application.query.filter_by(drive_id=drive.drive_id).count()
+            
+            drives_list.append({
+                'drive_id': drive.drive_id,
+                'company_id': drive.company_id,
+                'company_name': drive.company.company_name,
+                'job_role_title': drive.job_role_title,
+                'job_type': drive.job_type,
+                'ctc_package': float(drive.ctc_package) if drive.ctc_package else 0,
+                'eligible_programs': drive.eligible_programs,
+                'eligible_branches': drive.eligible_branches,
+                'eligible_batch_years': drive.eligible_batch_years,
+                'minimum_cgpa': float(drive.minimum_cgpa) if drive.minimum_cgpa else 0,
+                'drive_status': drive.drive_status,
+                'application_count': app_count,
+                'created_at': drive.created_at.isoformat() if drive.created_at else None
+            })
         
-        return jsonify({'job_drives': result, 'count': len(result)}), 200
+        return jsonify({'job_drives': drives_list}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Get job drives error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch job drives'}), 500
 
-@admin_bp.route('/jobdrives/<int:drive_id>/lock', methods=['PUT'])
+@admin_bp.route('/job-drives/<drive_id>', methods=['GET'])
 @require_admin
-def lock_applications(drive_id):
-    """Lock applications for a drive (no more applications allowed)"""
+def get_job_drive_detail(drive_id):
+    """Get detailed info about a job drive"""
     try:
-        job_drive = JobDrive.query.get(drive_id)
-        if not job_drive:
+        drive = JobDrive.query.get(drive_id)
+        if not drive:
             return jsonify({'error': 'Job drive not found'}), 404
         
-        job_drive.applications_locked = True
-        db.session.commit()
+        # Get applications for this drive
+        applications = Application.query.filter_by(drive_id=drive_id).all()
         
-        return jsonify({'message': 'Applications locked'}), 200
+        apps_list = []
+        for app in applications:
+            student = app.student
+            apps_list.append({
+                'application_id': app.application_id,
+                'student_id': student.student_id,
+                'full_name': student.full_name,
+                'roll_number': student.roll_number,
+                'program': student.program,
+                'branch': student.branch,
+                'cgpa': float(student.cgpa) if student.cgpa else 0,
+                'status': app.status,
+                'applied_at': app.applied_at.isoformat() if app.applied_at else None
+            })
+        
+        drive_data = {
+            'drive_id': drive.drive_id,
+            'company_id': drive.company_id,
+            'company_name': drive.company.company_name,
+            'job_role_title': drive.job_role_title,
+            'job_description': drive.job_description,
+            'job_type': drive.job_type,
+            'work_mode': drive.work_mode,
+            'job_locations': drive.job_locations,
+            'ctc_package': float(drive.ctc_package) if drive.ctc_package else 0,
+            'package_breakup': drive.package_breakup,
+            'eligible_programs': drive.eligible_programs,
+            'eligible_branches': drive.eligible_branches,
+            'eligible_batch_years': drive.eligible_batch_years,
+            'minimum_cgpa': float(drive.minimum_cgpa) if drive.minimum_cgpa else 0,
+            'max_active_backlogs': drive.max_active_backlogs,
+            'required_skills': drive.required_skills,
+            'drive_status': drive.drive_status,
+            'applications': apps_list
+        }
+        
+        return jsonify(drive_data), 200
         
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-# ==================== STUDENT MANAGEMENT ====================
+        print(f"Get job drive detail error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch job drive details'}), 500
 
 @admin_bp.route('/students', methods=['GET'])
 @require_admin
-def get_all_students():
-    """
-    Get all students with optional filtering
-    Query params: ?branch=CSE&year=4&min_cgpa=7.0&placed=false
-    """
+def get_students():
+    """Get all students with filtering"""
     try:
-        # Build dynamic query based on filters
-        query = Student.query
+        program = request.args.get('program')
+        branch = request.args.get('branch')
+        batch_year = request.args.get('batch_year')
+        placement_status = request.args.get('placement_status')
         
-        if request.args.get('branch'):
-            query = query.filter_by(branch=request.args.get('branch'))
+        query = StudentMaster.query
+        if program:
+            query = query.filter_by(program=program)
+        if branch:
+            query = query.filter_by(branch=branch)
+        if batch_year:
+            query = query.filter_by(batch_year=int(batch_year))
+        if placement_status:
+            query = query.filter_by(placement_status=placement_status)
         
-        if request.args.get('year'):
-            query = query.filter_by(year=int(request.args.get('year')))
+        students = query.order_by(StudentMaster.full_name).all()
         
-        if request.args.get('min_cgpa'):
-            query = query.filter(Student.cgpa >= float(request.args.get('min_cgpa')))
+        students_list = []
+        for student in students:
+            students_list.append({
+                'student_id': student.student_id,
+                'full_name': student.full_name,
+                'roll_number': student.roll_number,
+                'program': student.program,
+                'branch': student.branch,
+                'batch_year': student.batch_year,
+                'cgpa': float(student.cgpa) if student.cgpa else 0,
+                'active_backlogs': student.active_backlogs,
+                'placement_status': student.placement_status,
+                'company_placed_id': student.company_placed_id,
+                'package_offered': float(student.package_offered) if student.package_offered else None,
+                'is_profile_verified': student.is_profile_verified
+            })
         
-        if request.args.get('placed'):
-            is_placed = request.args.get('placed').lower() == 'true'
-            query = query.filter_by(is_placed=is_placed)
-        
-        students = query.all()
-        
-        result = [{
-            'id': s.id,
-            'enrollment_number': s.enrollment_number,
-            'name': s.name,
-            'email': s.user.email,
-            'phone': s.phone,
-            'branch': s.branch,
-            'year': s.year,
-            'cgpa': s.cgpa,
-            'active_backlogs': s.active_backlogs,
-            'is_placed': s.is_placed,
-            'placed_company': s.placed_company,
-            'placement_package': s.placement_package
-        } for s in students]
-        
-        return jsonify({'students': result, 'count': len(result)}), 200
+        return jsonify({'students': students_list}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Get students error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch students'}), 500
 
-@admin_bp.route('/jobdrives/<int:drive_id>/eligible-students', methods=['GET'])
+@admin_bp.route('/students/<student_id>', methods=['GET'])
 @require_admin
-def get_eligible_students(drive_id):
-    """
-    Get students eligible for a specific job drive based on criteria
-    This implements the Student Eligibility Engine
-    """
+def get_student_detail(student_id):
+    """Get detailed info about a student"""
     try:
-        job_drive = JobDrive.query.get(drive_id)
-        if not job_drive:
-            return jsonify({'error': 'Job drive not found'}), 404
-        
-        # Build eligibility query
-        query = Student.query.filter(
-            Student.year.in_(job_drive.eligible_years),
-            Student.branch.in_(job_drive.eligible_branches),
-            Student.cgpa >= job_drive.min_cgpa,
-            Student.active_backlogs <= job_drive.max_active_backlogs,
-            Student.can_apply == True,
-            Student.is_placed == False  # Only unplaced students
-        )
-        
-        # Additional filters
-        if job_drive.min_tenth_percentage:
-            query = query.filter(Student.tenth_percentage >= job_drive.min_tenth_percentage)
-        
-        if job_drive.min_twelfth_percentage:
-            query = query.filter(Student.twelfth_percentage >= job_drive.min_twelfth_percentage)
-        
-        eligible_students = query.all()
-        
-        result = [{
-            'id': s.id,
-            'enrollment_number': s.enrollment_number,
-            'name': s.name,
-            'email': s.user.email,
-            'branch': s.branch,
-            'year': s.year,
-            'cgpa': s.cgpa,
-            'tenth_percentage': s.tenth_percentage,
-            'twelfth_percentage': s.twelfth_percentage,
-            'active_backlogs': s.active_backlogs
-        } for s in eligible_students]
-        
-        return jsonify({
-            'job_drive_name': job_drive.drive_name,
-            'eligible_students': result,
-            'count': len(result)
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@admin_bp.route('/jobdrives/<int:drive_id>/applicants', methods=['GET'])
-@require_admin
-def get_drive_applicants(drive_id):
-    """Get all students who applied to a specific drive"""
-    try:
-        job_drive = JobDrive.query.get(drive_id)
-        if not job_drive:
-            return jsonify({'error': 'Job drive not found'}), 404
-        
-        applications = Application.query.filter_by(job_drive_id=drive_id).all()
-        
-        result = [{
-            'application_id': app.id,
-            'student_id': app.student.id,
-            'enrollment_number': app.student.enrollment_number,
-            'name': app.student.name,
-            'email': app.student.user.email,
-            'branch': app.student.branch,
-            'cgpa': app.student.cgpa,
-            'status': app.status,
-            'applied_at': app.applied_at.isoformat()
-        } for app in applications]
-        
-        return jsonify({
-            'job_drive_name': job_drive.drive_name,
-            'applicants': result,
-            'count': len(result)
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@admin_bp.route('/students/<int:student_id>/placement', methods=['PUT'])
-@require_admin
-def update_student_placement(student_id):
-    """
-    Update student placement status
-    Expects: { "is_placed": true, "placed_company": "...", "placement_package": ..., 
-               "placement_category": "dream" }
-    """
-    try:
-        data = request.get_json()
-        student = Student.query.get(student_id)
-        
+        student = StudentMaster.query.get(student_id)
         if not student:
             return jsonify({'error': 'Student not found'}), 404
         
-        student.is_placed = data.get('is_placed', False)
-        student.placed_company = data.get('placed_company')
-        student.placement_package = data.get('placement_package')
-        student.placement_category = data.get('placement_category')
-        student.placement_date = datetime.utcnow().date()
+        # Get applications
+        applications = Application.query.filter_by(student_id=student_id).all()
         
-        # Apply placement rules (e.g., dream company rule)
-        if student.is_placed and data.get('placement_category') == 'dream':
-            student.can_apply = False  # Cannot apply to more companies
+        apps_list = []
+        for app in applications:
+            drive = app.job_drive
+            apps_list.append({
+                'application_id': app.application_id,
+                'drive_id': drive.drive_id,
+                'company_name': drive.company.company_name,
+                'job_role_title': drive.job_role_title,
+                'status': app.status,
+                'applied_at': app.applied_at.isoformat() if app.applied_at else None
+            })
+        
+        student_data = {
+            'student_id': student.student_id,
+            'full_name': student.full_name,
+            'roll_number': student.roll_number,
+            'email': student.user.email if student.user else None,
+            'personal_email': student.personal_email,
+            'contact_number': student.contact_number,
+            'program': student.program,
+            'branch': student.branch,
+            'batch_year': student.batch_year,
+            'current_semester': student.current_semester,
+            'cgpa': float(student.cgpa) if student.cgpa else 0,
+            'active_backlogs': student.active_backlogs,
+            'total_backlogs': student.total_backlogs,
+            'tenth_percentage': float(student.tenth_percentage) if student.tenth_percentage else None,
+            'twelfth_percentage': float(student.twelfth_percentage) if student.twelfth_percentage else None,
+            'placement_status': student.placement_status,
+            'is_profile_verified': student.is_profile_verified,
+            'applications': apps_list
+        }
+        
+        return jsonify(student_data), 200
+        
+    except Exception as e:
+        print(f"Get student detail error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch student details'}), 500
+
+@admin_bp.route('/students/<student_id>/verify', methods=['POST'])
+@require_admin
+def verify_student(student_id):
+    """Verify student profile"""
+    try:
+        identity = get_jwt_identity()
+        admin = Admin.query.filter_by(user_id=identity['user_id']).first()
+        if not admin:
+            return jsonify({'error': 'Admin profile not found'}), 404
+        
+        student = StudentMaster.query.get(student_id)
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+        
+        student.is_profile_verified = True
+        student.verified_by_admin_id = admin.admin_id
+        student.verification_date = datetime.utcnow()
         
         db.session.commit()
         
-        return jsonify({'message': 'Student placement status updated'}), 200
+        return jsonify({
+            'message': f'{student.full_name} profile verified successfully',
+            'student_id': student.student_id
+        }), 200
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        print(f"Verify student error: {str(e)}")
+        return jsonify({'error': 'Failed to verify student'}), 500
 
-@admin_bp.route('/export/students', methods=['POST'])
+@admin_bp.route('/statistics', methods=['GET'])
 @require_admin
-def export_students():
-    """
-    Export filtered student data (placeholder for CSV/Excel export)
-    Expects: { "filters": { "branch": "CSE", "min_cgpa": 7.0, ... } }
-    Returns: Student data array
-    """
+def get_statistics():
+    """Get placement statistics"""
     try:
-        data = request.get_json()
-        filters = data.get('filters', {})
+        total_students = StudentMaster.query.count()
+        placed_students = StudentMaster.query.filter_by(placement_status='Placed').count()
+        total_companies = Company.query.filter_by(status='Approved').count()
+        total_drives = JobDrive.query.filter_by(drive_status='Published').count()
+        total_applications = Application.query.count()
         
-        # This is a simplified version - in production, generate CSV/Excel
-        query = Student.query
+        stats = {
+            'total_students': total_students,
+            'placed_students': placed_students,
+            'unplaced_students': total_students - placed_students,
+            'placement_percentage': round((placed_students / total_students * 100), 2) if total_students > 0 else 0,
+            'total_companies': total_companies,
+            'total_drives': total_drives,
+            'total_applications': total_applications
+        }
         
-        if filters.get('branch'):
-            query = query.filter_by(branch=filters['branch'])
-        
-        if filters.get('min_cgpa'):
-            query = query.filter(Student.cgpa >= filters['min_cgpa'])
-        
-        students = query.all()
-        
-        result = [{
-            'enrollment_number': s.enrollment_number,
-            'name': s.name,
-            'email': s.user.email,
-            'phone': s.phone,
-            'branch': s.branch,
-            'year': s.year,
-            'cgpa': s.cgpa,
-            'tenth_percentage': s.tenth_percentage,
-            'twelfth_percentage': s.twelfth_percentage,
-            'active_backlogs': s.active_backlogs,
-            'resume_url': s.resume_url
-        } for s in students]
-        
-        return jsonify({'students': result, 'count': len(result)}), 200
+        return jsonify(stats), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Get statistics error: {str(e)}")
+        return jsonify({'error': 'Failed to fetch statistics'}), 500

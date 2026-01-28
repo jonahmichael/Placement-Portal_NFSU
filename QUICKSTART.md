@@ -216,3 +216,10 @@ Tables created:
 ---
 
 **You're all set! Start building! 🚀**
+
+
+---
+Admin Dashboard (http://localhost:3000/admin)
+Company Dashboard (http://localhost:3000/company)
+Student Dashboard (http://localhost:3000/student)
+Company Registration (http://localhost:3000/company/register)

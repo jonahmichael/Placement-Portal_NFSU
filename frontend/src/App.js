@@ -1,77 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import AdminDashboard from './components/AdminDashboard';
 import CompanyDashboard from './components/CompanyDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import CompanyRegister from './components/CompanyRegister';
 
+// Temporary Home component for testing without login
+function Home() {
+  return (
+    <div className="container" style={{ marginTop: '100px', textAlign: 'center' }}>
+      <div className="card">
+        <h1>NFSU Placement Portal</h1>
+        <p style={{ marginBottom: '30px' }}>Select a dashboard to test (Login disabled temporarily)</p>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '300px', margin: '0 auto' }}>
+          <Link to="/admin" className="btn btn-primary" style={{ textDecoration: 'none', display: 'block' }}>
+            Admin Dashboard
+          </Link>
+          <Link to="/company" className="btn btn-success" style={{ textDecoration: 'none', display: 'block' }}>
+            Company Dashboard
+          </Link>
+          <Link to="/student" className="btn" style={{ textDecoration: 'none', display: 'block', background: '#007bff', color: 'white' }}>
+            Student Dashboard
+          </Link>
+          <Link to="/company/register" className="btn" style={{ textDecoration: 'none', display: 'block', background: '#6c757d', color: 'white' }}>
+            Company Registration
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Mock user objects for testing
+  const mockAdmin = {
+    token: 'mock-token',
+    role: 'admin',
+    profile: { name: 'Test Admin', department: 'Placement Cell' }
+  };
 
-  useEffect(() => {
-    // Check if user is logged in (token in localStorage)
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('role');
-    const userProfile = localStorage.getItem('userProfile');
+  const mockCompany = {
+    token: 'mock-token',
+    role: 'company',
+    profile: { company_name: 'Test Company', verification_status: 'approved' }
+  };
 
-    if (token && role) {
-      setUser({
-        token,
-        role,
-        profile: userProfile ? JSON.parse(userProfile) : {}
-      });
+  const mockStudent = {
+    token: 'mock-token',
+    role: 'student',
+    profile: { 
+      name: 'Test Student', 
+      enrollment_number: 'NFSU001',
+      branch: 'CSE',
+      cgpa: 8.5,
+      is_placed: false
     }
-    setLoading(false);
-  }, []);
-
-  const handleLogin = (token, role, profile) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('role', role);
-    localStorage.setItem('userProfile', JSON.stringify(profile));
-    setUser({ token, role, profile });
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    localStorage.removeItem('userProfile');
-    setUser(null);
+    window.location.href = '/';
   };
-
-  if (loading) {
-    return <div className="container">Loading...</div>;
-  }
 
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Home />} />
+        
         <Route 
-          path="/login" 
-          element={!user ? <Login onLogin={handleLogin} /> : <Navigate to="/dashboard" />} 
+          path="/admin" 
+          element={<AdminDashboard user={mockAdmin} onLogout={handleLogout} />} 
+        />
+        
+        <Route 
+          path="/company" 
+          element={<CompanyDashboard user={mockCompany} onLogout={handleLogout} />} 
+        />
+        
+        <Route 
+          path="/student" 
+          element={<StudentDashboard user={mockStudent} onLogout={handleLogout} />} 
         />
         
         <Route 
           path="/company/register" 
           element={<CompanyRegister />} 
         />
-        
-        <Route 
-          path="/dashboard" 
-          element={
-            user ? (
-              user.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> :
-              user.role === 'company' ? <CompanyDashboard user={user} onLogout={handleLogout} /> :
-              user.role === 'student' ? <StudentDashboard user={user} onLogout={handleLogout} /> :
-              <Navigate to="/login" />
-            ) : (
-              <Navigate to="/login" />
-            )
-          } 
-        />
-        
-        <Route path="/" element={<Navigate to="/login" />} />
       </Routes>
     </Router>
   );
