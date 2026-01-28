@@ -1,39 +1,36 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ChakraProvider, extendTheme } from '@chakra-ui/react';
 import AdminDashboard from './components/AdminDashboard';
 import CompanyDashboard from './components/CompanyDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import CompanyRegister from './components/CompanyRegister';
+import Home from './components/Home';
 
-// Temporary Home component for testing without login
-function Home() {
-  return (
-    <div className="container" style={{ marginTop: '100px', textAlign: 'center' }}>
-      <div className="card">
-        <h1>NFSU Placement Portal</h1>
-        <p style={{ marginBottom: '30px' }}>Select a dashboard to test (Login disabled temporarily)</p>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '300px', margin: '0 auto' }}>
-          <Link to="/admin" className="btn btn-primary" style={{ textDecoration: 'none', display: 'block' }}>
-            Admin Dashboard
-          </Link>
-          <Link to="/company" className="btn btn-success" style={{ textDecoration: 'none', display: 'block' }}>
-            Company Dashboard
-          </Link>
-          <Link to="/student" className="btn" style={{ textDecoration: 'none', display: 'block', background: '#007bff', color: 'white' }}>
-            Student Dashboard
-          </Link>
-          <Link to="/company/register" className="btn" style={{ textDecoration: 'none', display: 'block', background: '#6c757d', color: 'white' }}>
-            Company Registration
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Chakra UI theme configuration
+const theme = extendTheme({
+  colors: {
+    brand: {
+      50: '#e6f2ff',
+      100: '#b3d9ff',
+      200: '#80c0ff',
+      300: '#4da6ff',
+      400: '#1a8cff',
+      500: '#0073e6',
+      600: '#005ab3',
+      700: '#004080',
+      800: '#00264d',
+      900: '#000d1a',
+    },
+  },
+  config: {
+    initialColorMode: 'light',
+    useSystemColorMode: false,
+  },
+});
 
 function App() {
-  // Mock user objects for testing
+  // Mock user objects for testing (JWT disabled temporarily)
   const mockAdmin = {
     token: 'mock-token',
     role: 'admin',
@@ -63,31 +60,33 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        
-        <Route 
-          path="/admin" 
-          element={<AdminDashboard user={mockAdmin} onLogout={handleLogout} />} 
-        />
-        
-        <Route 
-          path="/company" 
-          element={<CompanyDashboard user={mockCompany} onLogout={handleLogout} />} 
-        />
-        
-        <Route 
-          path="/student" 
-          element={<StudentDashboard user={mockStudent} onLogout={handleLogout} />} 
-        />
-        
-        <Route 
-          path="/company/register" 
-          element={<CompanyRegister />} 
-        />
-      </Routes>
-    </Router>
+    <ChakraProvider theme={theme}>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          
+          <Route 
+            path="/admin" 
+            element={<AdminDashboard user={mockAdmin} onLogout={handleLogout} />} 
+          />
+          
+          <Route 
+            path="/company" 
+            element={<CompanyDashboard user={mockCompany} onLogout={handleLogout} />} 
+          />
+          
+          <Route 
+            path="/student" 
+            element={<StudentDashboard user={mockStudent} onLogout={handleLogout} />} 
+          />
+          
+          <Route 
+            path="/company/register" 
+            element={<CompanyRegister />} 
+          />
+        </Routes>
+      </Router>
+    </ChakraProvider>
   );
 }
 

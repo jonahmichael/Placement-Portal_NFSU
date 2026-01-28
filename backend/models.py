@@ -1,22 +1,15 @@
 """
-SQLAlchemy ORM Models - Multi-Schema Architecture
+SQLAlchemy ORM Models - Matching Existing Neon DB Schema
 College Placement Management System - NFSU
 
-Schemas:
-- public: Core authentication and applications
-- admin: Master student data, placements, admin profiles
-- student: Editable student profiles
-- company: Company profiles and job drives
+IMPORTANT: These models reflect the EXISTING database schema.
+Do NOT use db.create_all() - tables already exist in Neon DB.
 """
 
 from app import db
 from datetime import datetime, date
-import uuid
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
-
-# Helper function for UUID generation
-def generate_uuid():
-    return str(uuid.uuid4())
+import uuid
 
 # ==================== PUBLIC SCHEMA ====================
 
@@ -25,13 +18,13 @@ class User(db.Model):
     __tablename__ = 'users'
     __table_args__ = {'schema': 'public'}
     
-    user_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
+    user_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'student', 'company'
+    role = db.Column(db.String(50), nullable=False)  # 'admin', 'student', 'company'
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_login = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     admin = db.relationship('Admin', back_populates='user', uselist=False)
@@ -43,28 +36,22 @@ class Application(db.Model):
     __tablename__ = 'applications'
     __table_args__ = {'schema': 'public'}
     
-    application_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    student_id = db.Column(db.String(36), db.ForeignKey('admin.students_master.student_id'), nullable=False, index=True)
-    drive_id = db.Column(db.String(36), db.ForeignKey('company.job_drives.drive_id'), nullable=False, index=True)
+    application_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.students_master.student_id'), nullable=False, index=True)
+    drive_id = db.Column(UUID(as_uuid=True), db.ForeignKey('company.job_drives.drive_id'), nullable=False, index=True)
     
     # Application details
-    status = db.Column(db.String(50), default='Applied')  # 'Applied', 'Shortlisted', 'Selected', 'Rejected', 'Accepted', 'Offer Rejected'
-    resume_submitted = db.Column(db.String(500))
-    cover_letter = db.Column(db.Text)
-    
-    # Timestamps
-    applied_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    application_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(50), default='Applied')
+    shortlist_date = db.Column(db.DateTime)
+    selection_date = db.Column(db.DateTime)
+    rejection_reason = db.Column(db.Text)
+    resume_submitted_path = db.Column(db.String(255))
+    interview_feedback = db.Column(db.Text)
     
     # Relationships
     student = db.relationship('StudentMaster', back_populates='applications')
     job_drive = db.relationship('JobDrive', back_populates='applications')
-    
-    # Unique constraint
-    __table_args__ = (
-        db.UniqueConstraint('student_id', 'drive_id', name='unique_student_drive_application'),
-        {'schema': 'public'}
-    )
 
 # ==================== ADMIN SCHEMA ====================
 
@@ -73,75 +60,96 @@ class Admin(db.Model):
     __tablename__ = 'admins'
     __table_args__ = {'schema': 'admin'}
     
-    admin_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    user_id = db.Column(db.String(36), db.ForeignKey('public.users.user_id'), unique=True, nullable=False)
+    admin_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('public.users.user_id'), unique=True, nullable=False)
     
-    full_name = db.Column(db.String(255), nullable=False)
+    full_name = db.Column(db.String(100), nullable=False)
+    mobile_number = db.Column(db.String(20))
     department = db.Column(db.String(100))
-    contact_number = db.Column(db.String(15))
-    designation = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     user = db.relationship('User', back_populates='admin')
 
 class StudentMaster(db.Model):
-    """Master student data (read-only for students) - admin.students_master"""
+    """Master student data (admin-managed) - admin.students_master"""
     __tablename__ = 'students_master'
     __table_args__ = {'schema': 'admin'}
     
-    student_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    user_id = db.Column(db.String(36), db.ForeignKey('public.users.user_id'), unique=True, nullable=False)
+    student_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('public.users.user_id'), unique=True, nullable=False)
     
     # Personal Information
-    full_name = db.Column(db.String(255), nullable=False)
     roll_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    enrollment_number = db.Column(db.String(50))
+    full_name = db.Column(db.String(100), nullable=False)
+    gender = db.Column(db.String(10))
     date_of_birth = db.Column(db.Date)
-    gender = db.Column(db.String(20))
-    category = db.Column(db.String(50))
+    nationality = db.Column(db.String(50))
+    category = db.Column(db.String(20))
+    aadhaar_number = db.Column(db.String(16))
+    
+    # Family Information
+    father_name = db.Column(db.String(100))
+    mother_name = db.Column(db.String(100))
     
     # Contact Information
-    personal_email = db.Column(db.String(255))
-    contact_number = db.Column(db.String(15))
-    alternate_contact = db.Column(db.String(15))
     permanent_address = db.Column(db.Text)
     current_address = db.Column(db.Text)
+    city = db.Column(db.String(50))
+    state = db.Column(db.String(50))
+    pincode = db.Column(db.String(10))
+    mobile_number = db.Column(db.String(20))
+    email_college = db.Column(db.String(255))
     
-    # Academic Information
-    program = db.Column(db.String(100))  # B.Tech, M.Tech, etc.
-    branch = db.Column(db.String(100))   # CSE, IT, ECE, etc.
-    batch_year = db.Column(db.Integer)
+    # Academic Information - University
+    university_name = db.Column(db.String(100), default='NFSU')
+    campus_name = db.Column(db.String(100))
+    course = db.Column(db.String(50))
+    branch = db.Column(db.String(100))
     current_semester = db.Column(db.Integer)
+    year_of_admission = db.Column(db.Integer)
+    year_of_passing = db.Column(db.Integer)
     cgpa = db.Column(db.Numeric(4, 2))
+    percentage_equivalent = db.Column(db.Numeric(5, 2))
+    backlogs_count = db.Column(db.Integer, default=0)
+    active_backlog = db.Column(db.Boolean, default=False)
+    
+    # Gap Information
+    gap_in_education = db.Column(db.Boolean, default=False)
+    gap_duration_years = db.Column(db.Integer)
     
     # 10th Details
     tenth_board = db.Column(db.String(100))
-    tenth_percentage = db.Column(db.Numeric(5, 2))
-    tenth_year = db.Column(db.Integer)
+    tenth_school_name = db.Column(db.String(255))
+    tenth_year_of_passing = db.Column(db.Integer)
+    tenth_percentage = db.Column(db.Numeric(4, 2))
     
-    # 12th/Diploma Details
+    # 12th Details
     twelfth_board = db.Column(db.String(100))
-    twelfth_percentage = db.Column(db.Numeric(5, 2))
-    twelfth_year = db.Column(db.Integer)
-    twelfth_stream = db.Column(db.String(100))
+    twelfth_school_name = db.Column(db.String(255))
+    twelfth_year_of_passing = db.Column(db.Integer)
+    twelfth_percentage = db.Column(db.Numeric(4, 2))
     
-    # Backlogs
-    active_backlogs = db.Column(db.Integer, default=0)
-    total_backlogs = db.Column(db.Integer, default=0)
+    # Diploma Details
+    diploma_board = db.Column(db.String(100))
+    diploma_school_name = db.Column(db.String(255))
+    diploma_year_of_passing = db.Column(db.Integer)
+    diploma_percentage = db.Column(db.Numeric(4, 2))
+    
+    medium_of_instruction = db.Column(db.String(50))
     
     # Verification Status
     is_profile_verified = db.Column(db.Boolean, default=False)
-    verified_by_admin_id = db.Column(db.String(36), db.ForeignKey('admin.admins.admin_id'))
+    verified_by_admin_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.admins.admin_id'))
     verification_date = db.Column(db.DateTime)
+    verification_remarks = db.Column(db.Text)
+    profile_completion_percentage = db.Column(db.Numeric(5, 2), default=0.00)
     
     # Placement Status
-    placement_status = db.Column(db.String(50), default='Unplaced')  # 'Unplaced', 'Placed', 'Higher Studies', 'Not Interested'
-    company_placed_id = db.Column(db.String(36), db.ForeignKey('company.companies.company_id'))
-    package_offered = db.Column(db.Numeric(10, 2))  # in LPA
-    date_of_offer = db.Column(db.Date)
-    is_ppo = db.Column(db.Boolean, default=False)
-    
-    # Eligibility
-    is_eligible_for_placement = db.Column(db.Boolean, default=True)
+    placement_status = db.Column(db.String(50), default='Not Placed')
+    eligible_for_placement_drives = db.Column(db.Boolean, default=True)
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -158,29 +166,22 @@ class Placement(db.Model):
     __tablename__ = 'placements'
     __table_args__ = {'schema': 'admin'}
     
-    placement_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    student_id = db.Column(db.String(36), db.ForeignKey('admin.students_master.student_id'), nullable=False)
-    company_id = db.Column(db.String(36), db.ForeignKey('company.companies.company_id'), nullable=False)
-    drive_id = db.Column(db.String(36), db.ForeignKey('company.job_drives.drive_id'), nullable=False)
-    application_id = db.Column(db.String(36), db.ForeignKey('public.applications.application_id'), nullable=False)
+    placement_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.students_master.student_id'), nullable=False)
+    company_id = db.Column(UUID(as_uuid=True), db.ForeignKey('company.companies.company_id'), nullable=False)
+    drive_id = db.Column(UUID(as_uuid=True), db.ForeignKey('company.job_drives.drive_id'))
     
     # Placement Details
-    job_role = db.Column(db.String(200), nullable=False)
-    package_lpa = db.Column(db.Numeric(10, 2), nullable=False)
-    placement_type = db.Column(db.String(50))  # 'Dream', 'Super Dream', 'Normal', 'Internship'
+    job_role = db.Column(db.String(100), nullable=False)
+    package_offered = db.Column(db.Numeric(10, 2), nullable=False)
+    offer_letter_path = db.Column(db.String(255))
+    date_of_offer = db.Column(db.Date, nullable=False)
+    acceptance_status = db.Column(db.String(50), default='Accepted')
     
-    # Offer Details
-    offer_letter_path = db.Column(db.String(500))
-    joining_date = db.Column(db.Date)
-    location = db.Column(db.String(200))
-    
-    # Acceptance
-    is_accepted_by_student = db.Column(db.Boolean, default=False)
-    acceptance_date = db.Column(db.DateTime)
-    
-    # Admin Actions
-    recorded_by_admin_id = db.Column(db.String(36), db.ForeignKey('admin.admins.admin_id'))
+    # Admin tracking
+    placement_recorded_by_admin_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.admins.admin_id'))
     recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     student = db.relationship('StudentMaster', back_populates='placements')
@@ -194,54 +195,60 @@ class StudentProfileEditable(db.Model):
     __tablename__ = 'student_profiles_editable'
     __table_args__ = {'schema': 'student'}
     
-    profile_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    student_id = db.Column(db.String(36), db.ForeignKey('admin.students_master.student_id'), unique=True, nullable=False)
-    user_id = db.Column(db.String(36), db.ForeignKey('public.users.user_id'), nullable=False)
+    student_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.students_master.student_id'), primary_key=True)
     
-    # Skills & Competencies (Arrays)
-    primary_skills = db.Column(ARRAY(db.Text), default=[])
-    secondary_skills = db.Column(ARRAY(db.Text), default=[])
-    programming_languages = db.Column(ARRAY(db.Text), default=[])
-    tools_technologies = db.Column(ARRAY(db.Text), default=[])
-    soft_skills = db.Column(ARRAY(db.Text), default=[])
-    languages_known = db.Column(ARRAY(db.Text), default=[])
+    # Additional Contact
+    personal_email = db.Column(db.String(255))
+    alternate_mobile_number = db.Column(db.String(20))
+    emergency_contact_number = db.Column(db.String(20))
     
-    # Projects (JSONB Array)
-    # Format: [{"title": "...", "description": "...", "technologies": [...], "link": "...", "duration": "..."}]
-    projects = db.Column(JSONB, default=[])
+    # Online Profiles
+    linkedin_profile = db.Column(db.String(255))
+    github_profile = db.Column(db.String(255))
+    portfolio_website = db.Column(db.String(255))
     
-    # Internships (JSONB Array)
-    # Format: [{"company": "...", "role": "...", "duration": "...", "description": "...", "certificate_path": "..."}]
-    internships = db.Column(JSONB, default=[])
-    
-    # Certifications (JSONB Array)
-    # Format: [{"name": "...", "issuer": "...", "issue_date": "...", "credential_id": "...", "certificate_path": "..."}]
-    certifications = db.Column(JSONB, default=[])
-    
-    # Achievements (JSONB Array)
-    # Format: [{"title": "...", "description": "...", "date": "...", "category": "..."}]
-    achievements = db.Column(JSONB, default=[])
-    
-    # Extra-curricular (JSONB Array)
-    extra_curricular = db.Column(JSONB, default=[])
-    
-    # Documents
-    resume_file_path = db.Column(db.String(500))
-    profile_photo_path = db.Column(db.String(500))
-    
-    # Additional Information
+    # Career Information
     career_objective = db.Column(db.Text)
-    linkedin_url = db.Column(db.String(255))
-    github_url = db.Column(db.String(255))
-    portfolio_url = db.Column(db.String(255))
+    
+    # Skills (PostgreSQL Arrays)
+    primary_skills = db.Column(ARRAY(db.Text))
+    secondary_skills = db.Column(ARRAY(db.Text))
+    programming_languages = db.Column(ARRAY(db.Text))
+    tools_and_technologies = db.Column(ARRAY(db.Text))
+    areas_of_interest = db.Column(ARRAY(db.Text))
+    
+    # Experience & Learning (JSONB)
+    certifications = db.Column(JSONB)
+    workshops_trainings = db.Column(JSONB)
+    internships = db.Column(JSONB)
+    projects = db.Column(JSONB)
+    publications = db.Column(JSONB)
+    
+    # Other Information
+    achievements = db.Column(db.Text)
+    extracurricular = db.Column(db.Text)
+    languages_known = db.Column(ARRAY(db.Text))
+    
+    # Document Uploads
+    resume_file_path = db.Column(db.String(255))
+    photo_file_path = db.Column(db.String(255))
+    marksheet_10_upload_path = db.Column(db.String(255))
+    marksheet_12_upload_path = db.Column(db.String(255))
+    degree_certificate_upload_path = db.Column(db.String(255))
+    id_proof_upload_path = db.Column(db.String(255))
+    other_documents_upload_path = db.Column(JSONB)
+    
+    # Consent & Declarations
+    declaration_correctness = db.Column(db.Boolean, default=False)
+    agreement_placement_rules = db.Column(db.Boolean, default=False)
+    consent_share_data = db.Column(db.Boolean, default=False)
     
     # Preferences
-    preferred_job_locations = db.Column(ARRAY(db.Text), default=[])
-    preferred_job_roles = db.Column(ARRAY(db.Text), default=[])
-    expected_salary_lpa = db.Column(db.Numeric(10, 2))
+    willingness_relocation = db.Column(db.Boolean)
+    willingness_bond = db.Column(db.Boolean)
+    preferred_job_location = db.Column(db.Text)
     
-    # Timestamps
-    last_updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     student_master = db.relationship('StudentMaster', back_populates='editable_profile')
@@ -249,47 +256,48 @@ class StudentProfileEditable(db.Model):
 # ==================== COMPANY SCHEMA ====================
 
 class Company(db.Model):
-    """Company profiles and verification - company.companies"""
+    """Company profiles - company.companies"""
     __tablename__ = 'companies'
     __table_args__ = {'schema': 'company'}
     
-    company_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    user_id = db.Column(db.String(36), db.ForeignKey('public.users.user_id'), unique=True, nullable=False)
+    company_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('public.users.user_id'), unique=True)
     
     # Company Details
     company_name = db.Column(db.String(255), nullable=False, index=True)
-    official_email = db.Column(db.String(255), nullable=False)
+    company_logo_path = db.Column(db.String(255))
     company_website = db.Column(db.String(255))
-    industry_type = db.Column(db.String(100))
-    company_size = db.Column(db.String(50))  # '1-50', '51-200', '201-500', '500+'
+    company_type = db.Column(db.String(50))
+    industry_domain = db.Column(db.String(100))
     company_description = db.Column(db.Text)
     
-    # HR Contact Details
-    hr_name = db.Column(db.String(255), nullable=False)
-    hr_email = db.Column(db.String(255), nullable=False)
-    hr_contact_number = db.Column(db.String(15))
-    hr_designation = db.Column(db.String(100))
-    
     # Company Address
-    office_address = db.Column(db.Text)
-    city = db.Column(db.String(100))
-    state = db.Column(db.String(100))
-    country = db.Column(db.String(100), default='India')
-    pincode = db.Column(db.String(10))
+    company_address = db.Column(db.Text)
+    city = db.Column(db.String(50))
+    state = db.Column(db.String(50))
+    country = db.Column(db.String(50), default='India')
+    
+    # Contact Person
+    contact_person_name = db.Column(db.String(100))
+    designation = db.Column(db.String(100))
+    official_email = db.Column(db.String(255), nullable=False)
+    phone_number = db.Column(db.String(20))
+    alternate_phone = db.Column(db.String(20))
+    linkedin_profile = db.Column(db.String(255))
     
     # Verification Status
-    status = db.Column(db.String(50), default='Pending Approval')  # 'Pending Approval', 'Approved', 'Rejected'
-    is_verified_by_admin = db.Column(db.Boolean, default=False)
-    approved_by_admin_id = db.Column(db.String(36), db.ForeignKey('admin.admins.admin_id'))
+    status = db.Column(db.String(50), default='Pending Approval')
+    approved_by_admin_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.admins.admin_id'))
     approval_date = db.Column(db.DateTime)
     rejection_reason = db.Column(db.Text)
+    is_verified_by_admin = db.Column(db.Boolean, default=False)
     
-    # Additional Details
-    past_recruitment_history = db.Column(db.Text)
-    special_requirements = db.Column(db.Text)
+    # Terms
+    terms_and_conditions_accepted = db.Column(db.Boolean, default=False)
     
     # Timestamps
-    registered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    registration_date = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
@@ -298,54 +306,66 @@ class Company(db.Model):
     placements = db.relationship('Placement', back_populates='company')
 
 class JobDrive(db.Model):
-    """Job drives created by admin for companies - company.job_drives"""
+    """Job drives - company.job_drives"""
     __tablename__ = 'job_drives'
     __table_args__ = {'schema': 'company'}
     
-    drive_id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
-    company_id = db.Column(db.String(36), db.ForeignKey('company.companies.company_id'), nullable=False, index=True)
-    created_by_admin_id = db.Column(db.String(36), db.ForeignKey('admin.admins.admin_id'), nullable=False)
+    drive_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = db.Column(UUID(as_uuid=True), db.ForeignKey('company.companies.company_id'), nullable=False, index=True)
     
     # Job Details
-    job_role_title = db.Column(db.String(255), nullable=False)
+    job_role_title = db.Column(db.String(100), nullable=False)
     job_description = db.Column(db.Text)
-    job_type = db.Column(db.String(50))  # 'Full-time', 'Internship', 'Part-time'
-    work_mode = db.Column(db.String(50))  # 'On-site', 'Remote', 'Hybrid'
-    job_locations = db.Column(ARRAY(db.Text), default=[])
+    number_of_vacancies = db.Column(db.Integer)
+    job_type = db.Column(db.String(50))
+    work_location = db.Column(db.String(100))
     
     # Package Details
-    ctc_package = db.Column(db.Numeric(10, 2), nullable=False)  # in LPA
-    package_breakup = db.Column(db.Text)
-    stipend_for_internship = db.Column(db.Numeric(10, 2))
-    bond_details = db.Column(db.Text)
+    ctc_package = db.Column(db.Numeric(10, 2))
+    salary_breakup = db.Column(db.Text)
+    bond_details = db.Column(db.Boolean)
+    bond_duration_months = db.Column(db.Integer)
+    probation_period_months = db.Column(db.Integer)
+    service_agreement = db.Column(db.Boolean)
     
-    # Eligibility Criteria
-    eligible_programs = db.Column(ARRAY(db.Text), default=[])  # ['B.Tech', 'M.Tech']
-    eligible_branches = db.Column(ARRAY(db.Text), default=[])  # ['CSE', 'IT', 'ECE']
-    eligible_batch_years = db.Column(ARRAY(db.Integer), default=[])
-    minimum_cgpa = db.Column(db.Numeric(4, 2), default=0.0)
-    max_active_backlogs = db.Column(db.Integer, default=0)
-    minimum_tenth_percentage = db.Column(db.Numeric(5, 2))
-    minimum_twelfth_percentage = db.Column(db.Numeric(5, 2))
-    required_skills = db.Column(ARRAY(db.Text), default=[])
+    # Eligibility Criteria (Arrays)
+    eligible_courses = db.Column(ARRAY(db.Text))
+    eligible_branches = db.Column(ARRAY(db.Text))
+    passing_year = db.Column(ARRAY(db.Integer))
+    selection_rounds = db.Column(ARRAY(db.Text))
     
-    # Gender specific
-    gender_preference = db.Column(db.String(20))  # 'Male', 'Female', 'Any'
+    # Eligibility Numbers
+    minimum_cgpa = db.Column(db.Numeric(4, 2))
+    minimum_10th_percentage = db.Column(db.Numeric(4, 2))
+    minimum_12th_percentage = db.Column(db.Numeric(4, 2))
+    backlogs_allowed = db.Column(db.Integer, default=0)
+    age_limit = db.Column(db.Integer)
     
-    # Drive Status and Timeline
-    drive_status = db.Column(db.String(50), default='Published')  # 'Draft', 'Published', 'Closed', 'Completed'
-    application_start_date = db.Column(db.DateTime)
-    application_end_date = db.Column(db.DateTime)
-    drive_conducted_date = db.Column(db.Date)
+    # Gender Specific
+    gender_specific = db.Column(db.Boolean, default=False)
     
     # Selection Process
-    # Format: [{"round_name": "...", "round_type": "...", "date": "...", "description": "..."}]
-    selection_rounds = db.Column(JSONB, default=[])
+    online_or_offline = db.Column(db.String(20))
+    test_platform = db.Column(db.String(100))
+    interview_mode = db.Column(db.String(20))
     
-    # Documents Required
-    documents_required = db.Column(ARRAY(db.Text), default=[])
+    # Important Dates
+    expected_date_of_visit = db.Column(db.Date)
+    expected_offer_date = db.Column(db.Date)
+    application_start_date = db.Column(db.Date)
+    application_end_date = db.Column(db.Date, nullable=False)
+    drive_date = db.Column(db.Date)
     
-    # Timestamps
+    # Status
+    drive_status = db.Column(db.String(50), default='Published')
+    
+    # Documents
+    job_notification_pdf_path = db.Column(db.String(255))
+    company_consent_form_path = db.Column(db.String(255))
+    nda_required = db.Column(db.Boolean)
+    
+    # Admin tracking
+    created_by_admin_id = db.Column(UUID(as_uuid=True), db.ForeignKey('admin.admins.admin_id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

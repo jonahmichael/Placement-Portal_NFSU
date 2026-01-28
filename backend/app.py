@@ -38,9 +38,9 @@ def create_app(config_class=Config):
     app.register_blueprint(company_bp, url_prefix='/api/company')
     app.register_blueprint(student_bp, url_prefix='/api/student')
     
-    # Create database tables
-    with app.app_context():
-        db.create_all()
+    # NOTE: Database tables already exist in Neon - DO NOT create tables
+    # with app.app_context():
+    #     db.create_all()
     
     @app.route('/')
     def home():
