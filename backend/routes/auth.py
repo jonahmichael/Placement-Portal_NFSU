@@ -36,10 +36,6 @@ def login():
         if not user.is_active:
             return jsonify({'error': 'Account is disabled'}), 403
         
-        # Update last login
-        user.last_login = datetime.utcnow()
-        db.session.commit()
-        
         # Create JWT token
         access_token = create_access_token(identity={'user_id': user.user_id, 'role': user.role})
         
@@ -74,14 +70,14 @@ def login():
         print(f"Login error: {str(e)}")
         return jsonify({'error': 'Login failed'}), 500
 
-@auth_bp.route('/register/student', methods=['POST'])
+@auth_bp.route('/register', methods=['POST'])
 def register_student():
-    """Student registration endpoint"""
+    """Student registration endpoint - creates entries in public.users and admin.students_master"""
     try:
         data = request.get_json()
         
         # Required fields
-        required_fields = ['email', 'password', 'full_name', 'roll_number', 'program', 'branch', 'batch_year']
+        required_fields = ['email', 'password', 'full_name', 'roll_number']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
@@ -97,7 +93,7 @@ def register_student():
         # Hash password
         password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
         
-        # Create User
+        # Create User in public.users table
         user = User(
             email=data['email'],
             password_hash=password_hash,
@@ -107,46 +103,49 @@ def register_student():
         db.session.add(user)
         db.session.flush()  # Get user_id
         
-        # Create StudentMaster
+        # Create StudentMaster in admin.students_master table
         student = StudentMaster(
             user_id=user.user_id,
-            full_name=data['full_name'],
             roll_number=data['roll_number'],
-            program=data['program'],
-            branch=data['branch'],
-            batch_year=data['batch_year'],
-            current_semester=data.get('current_semester', 1),
-            cgpa=data.get('cgpa', 0.0),
-            active_backlogs=data.get('active_backlogs', 0),
-            total_backlogs=data.get('total_backlogs', 0),
-            date_of_birth=data.get('date_of_birth'),
+            enrollment_number=data.get('enrollment_number'),
+            full_name=data['full_name'],
             gender=data.get('gender'),
-            category=data.get('category'),
-            personal_email=data.get('personal_email'),
-            contact_number=data.get('contact_number'),
-            permanent_address=data.get('permanent_address'),
-            current_address=data.get('current_address'),
-            tenth_board=data.get('tenth_board'),
-            tenth_percentage=data.get('tenth_percentage'),
-            tenth_year=data.get('tenth_year'),
-            twelfth_board=data.get('twelfth_board'),
-            twelfth_percentage=data.get('twelfth_percentage'),
-            twelfth_year=data.get('twelfth_year'),
-            twelfth_stream=data.get('twelfth_stream')
+            mobile_number=data.get('mobile_number'),
+            email_college=data['email'],  # College email is the login email
+            university_name='NFSU',  # Default as per schema
+            course=data.get('course'),
+            branch=data.get('branch'),
+            current_semester=data.get('current_semester'),
+            year_of_admission=data.get('year_of_admission'),
+            cgpa=0.0,  # Default
+            backlogs_count=0,  # Default
+            active_backlog=False,  # Default
+            gap_in_education=False,  # Default
+            is_profile_verified=False,  # Default
+            profile_completion_percentage=0.0,  # Default
+            placement_status='Not Placed',  # Default
+            eligible_for_placement_drives=True  # Default
         )
         db.session.add(student)
         db.session.commit()
         
         return jsonify({
-            'message': 'Student registration successful',
-            'student_id': student.student_id,
-            'user_id': user.user_id
+            'message': 'Account created successfully! Please login.',
+            'student_id': str(student.student_id),
+            'user_id': str(user.user_id)
         }), 201
         
     except Exception as e:
         db.session.rollback()
         print(f"Student registration error: {str(e)}")
-        return jsonify({'error': 'Registration failed'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e) if str(e) else 'Registration failed'}), 500
+
+@auth_bp.route('/register/student', methods=['POST'])
+def register_student_legacy():
+    """Legacy endpoint - redirects to /register"""
+    return register_student()
 
 @auth_bp.route('/register/admin', methods=['POST'])
 def register_admin():

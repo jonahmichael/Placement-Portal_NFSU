@@ -25,7 +25,7 @@ def require_student(f):
 @student_bp.route('/profile/master', methods=['GET'])
 @require_student
 def get_master_profile():
-    """Get master profile (read-only)"""
+    """Get master profile (read-only institutional data from admin.students_master)"""
     try:
         identity = get_jwt_identity()
         student = StudentMaster.query.filter_by(user_id=identity['user_id']).first()
@@ -33,41 +33,68 @@ def get_master_profile():
             return jsonify({'error': 'Student profile not found'}), 404
         
         profile_data = {
-            'student_id': student.student_id,
+            'student_id': str(student.student_id),
             'full_name': student.full_name,
             'roll_number': student.roll_number,
-            'email': student.user.email if student.user else None,
-            'personal_email': student.personal_email,
-            'contact_number': student.contact_number,
+            'enrollment_number': student.enrollment_number,
+            'email_college': student.email_college,
+            'mobile_number': student.mobile_number,
             'date_of_birth': student.date_of_birth.isoformat() if student.date_of_birth else None,
             'gender': student.gender,
+            'nationality': student.nationality,
             'category': student.category,
+            'aadhaar_number': student.aadhaar_number,
+            'father_name': student.father_name,
+            'mother_name': student.mother_name,
             'permanent_address': student.permanent_address,
             'current_address': student.current_address,
-            'program': student.program,
+            'city': student.city,
+            'state': student.state,
+            'pincode': student.pincode,
+            'university_name': student.university_name,
+            'campus_name': student.campus_name,
+            'course': student.course,
             'branch': student.branch,
-            'batch_year': student.batch_year,
             'current_semester': student.current_semester,
-            'cgpa': float(student.cgpa) if student.cgpa else 0,
-            'active_backlogs': student.active_backlogs,
-            'total_backlogs': student.total_backlogs,
+            'year_of_admission': student.year_of_admission,
+            'year_of_passing': student.year_of_passing,
+            'cgpa': float(student.cgpa) if student.cgpa else 0.0,
+            'percentage_equivalent': float(student.percentage_equivalent) if student.percentage_equivalent else None,
+            'backlogs_count': student.backlogs_count,
+            'active_backlog': student.active_backlog,
+            'gap_in_education': student.gap_in_education,
+            'gap_duration_years': student.gap_duration_years,
             'tenth_board': student.tenth_board,
+            'tenth_school_name': student.tenth_school_name,
+            'tenth_year_of_passing': student.tenth_year_of_passing,
             'tenth_percentage': float(student.tenth_percentage) if student.tenth_percentage else None,
-            'tenth_year': student.tenth_year,
             'twelfth_board': student.twelfth_board,
+            'twelfth_school_name': student.twelfth_school_name,
+            'twelfth_year_of_passing': student.twelfth_year_of_passing,
             'twelfth_percentage': float(student.twelfth_percentage) if student.twelfth_percentage else None,
-            'twelfth_year': student.twelfth_year,
-            'twelfth_stream': student.twelfth_stream,
+            'diploma_board': student.diploma_board,
+            'diploma_school_name': student.diploma_school_name,
+            'diploma_year_of_passing': student.diploma_year_of_passing,
+            'diploma_percentage': float(student.diploma_percentage) if student.diploma_percentage else None,
+            'medium_of_instruction': student.medium_of_instruction,
             'is_profile_verified': student.is_profile_verified,
+            'verified_by_admin_id': str(student.verified_by_admin_id) if student.verified_by_admin_id else None,
+            'verification_date': student.verification_date.isoformat() if student.verification_date else None,
+            'verification_remarks': student.verification_remarks,
+            'profile_completion_percentage': float(student.profile_completion_percentage) if student.profile_completion_percentage else 0.0,
             'placement_status': student.placement_status,
-            'is_eligible_for_placement': student.is_eligible_for_placement
+            'eligible_for_placement_drives': student.eligible_for_placement_drives,
+            'created_at': student.created_at.isoformat() if student.created_at else None,
+            'updated_at': student.updated_at.isoformat() if student.updated_at else None
         }
         
         return jsonify(profile_data), 200
         
     except Exception as e:
         print(f"Get master profile error: {str(e)}")
-        return jsonify({'error': 'Failed to fetch profile'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @student_bp.route('/profile/editable', methods=['GET'])
 @require_student

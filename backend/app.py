@@ -4,14 +4,15 @@ College Placement Management System - NFSU
 """
 
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
 from config import Config
 
+# Import db from models to avoid circular imports
+from models import db
+
 # Initialize extensions
-db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
 

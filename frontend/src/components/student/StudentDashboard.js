@@ -8,7 +8,6 @@ import {
   Tab,
   TabPanel,
   Heading,
-  useColorModeValue,
   Flex,
   Button,
   Avatar,
@@ -30,9 +29,9 @@ function StudentDashboard({ user, onLogout }) {
   const [studentData, setStudentData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
-  const headerBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const bgColor = 'white';
+  const headerBg = 'white';
+  const borderColor = 'gray.200';
 
   // Fetch student data on mount
   useEffect(() => {
@@ -42,28 +41,87 @@ function StudentDashboard({ user, onLogout }) {
   const fetchStudentData = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/student/profile/master');
-      // const data = await response.json();
+      const token = localStorage.getItem('access_token');
       
-      // Mock data for now
-      const mockData = {
-        student_id: 'uuid-123',
-        full_name: 'Raj Kumar Sharma',
-        roll_number: 'NFSU2024001',
-        email_college: 'raj.sharma@nfsu.ac.in',
-        profile_completion_percentage: 75,
-        placement_status: 'Not Placed',
-        eligible_for_placement_drives: true,
-        cgpa: 8.5,
-        branch: 'Computer Science & Engineering',
-        course: 'B.Tech',
-        year_of_passing: 2025,
+      if (!token) {
+        console.error('No access token found');
+        onLogout();
+        return;
+      }
+
+      // Fetch master profile (read-only data)
+      const masterResponse = await fetch('http://localhost:5000/api/student/profile/master', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!masterResponse.ok) {
+        if (masterResponse.status === 401) {
+          console.error('Unauthorized - token expired');
+          onLogout();
+          return;
+        }
+        throw new Error('Failed to fetch master profile');
+      }
+
+      const masterData = await masterResponse.json();
+
+      // Fetch editable profile
+      const editableResponse = await fetch('http://localhost:5000/api/student/profile/editable', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      let editableData = {};
+      if (editableResponse.ok) {
+        editableData = await editableResponse.json();
+      }
+
+      // Calculate profile completion percentage
+      const totalFields = 20;
+      let completedFields = 0;
+      
+      // Check master fields
+      if (masterData.full_name) completedFields++;
+      if (masterData.email) completedFields++;
+      if (masterData.contact_number) completedFields++;
+      if (masterData.date_of_birth) completedFields++;
+      if (masterData.cgpa) completedFields++;
+      if (masterData.tenth_percentage) completedFields++;
+      if (masterData.twelfth_percentage) completedFields++;
+      if (masterData.personal_email) completedFields++;
+      if (masterData.permanent_address) completedFields++;
+      if (masterData.current_address) completedFields++;
+      
+      // Check editable fields
+      if (editableData.primary_skills?.length > 0) completedFields++;
+      if (editableData.programming_languages?.length > 0) completedFields++;
+      if (editableData.projects?.length > 0) completedFields++;
+      if (editableData.internships?.length > 0) completedFields++;
+      if (editableData.achievements?.length > 0) completedFields++;
+      if (editableData.certifications?.length > 0) completedFields++;
+      if (editableData.linkedin_profile) completedFields++;
+      if (editableData.github_profile) completedFields++;
+      if (editableData.resume_url) completedFields++;
+      if (editableData.photo_url) completedFields++;
+      
+      const profileCompletionPercentage = Math.round((completedFields / totalFields) * 100);
+
+      // Combine both profiles
+      const combinedData = {
+        ...masterData,
+        profile_completion_percentage: profileCompletionPercentage,
+        editable: editableData,
       };
       
-      setStudentData(mockData);
+      setStudentData(combinedData);
     } catch (error) {
       console.error('Error fetching student data:', error);
+      // Keep showing any existing data, don't clear it
     } finally {
       setLoading(false);
     }
@@ -79,10 +137,10 @@ function StudentDashboard({ user, onLogout }) {
               <Avatar 
                 size="md" 
                 name={studentData?.full_name || 'Student'} 
-                bg="blue.500"
+                bg="black"
               />
               <Box>
-                <Heading size="sm">{studentData?.full_name || 'Loading...'}</Heading>
+                <Heading size="sm" fontWeight="normal" color="black">{studentData?.full_name || 'Loading...'}</Heading>
                 <Text fontSize="xs" color="gray.600">
                   {studentData?.roll_number} • {studentData?.branch}
                 </Text>
@@ -90,13 +148,12 @@ function StudentDashboard({ user, onLogout }) {
             </HStack>
             
             <HStack spacing={4}>
-              <Badge colorScheme={studentData?.placement_status === 'Placed' ? 'green' : 'orange'}>
+              <Badge variant="outline" borderColor="gray.400" color="black">
                 {studentData?.placement_status || 'Loading...'}
               </Badge>
               <Button 
                 leftIcon={<FiLogOut />} 
-                variant="ghost" 
-                colorScheme="red"
+                variant="ghost"
                 onClick={onLogout}
                 size="sm"
               >
@@ -112,8 +169,7 @@ function StudentDashboard({ user, onLogout }) {
         <Tabs 
           index={activeTab} 
           onChange={setActiveTab} 
-          variant="enclosed" 
-          colorScheme="blue"
+          variant="line"
           isLazy
         >
           <TabList mb={4} flexWrap="wrap">

@@ -6,10 +6,13 @@ IMPORTANT: These models reflect the EXISTING database schema.
 Do NOT use db.create_all() - tables already exist in Neon DB.
 """
 
-from app import db
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 import uuid
+
+# Create db instance here to avoid circular imports
+db = SQLAlchemy()
 
 # ==================== PUBLIC SCHEMA ====================
 
