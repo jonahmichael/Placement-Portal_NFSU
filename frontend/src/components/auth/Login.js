@@ -148,14 +148,14 @@ function Login({ onLogin }) {
   return (
     <Box minH="100vh" bg="white" display="flex" alignItems="center" justifyContent="center" py={8}>
       <Container maxW={isLogin ? "md" : "2xl"}>
-        <Card borderWidth="1px" borderColor="gray.200">
-          <CardBody p={8}>
+        <Card borderWidth="2px" borderColor="black" bg="white" boxShadow="none">
+          <CardBody p={8} bg="white">
             <VStack spacing={6} align="stretch">
               <VStack spacing={2}>
                 <Heading size="lg" color="black" fontWeight="normal">
                   {isLogin ? 'Student Login' : 'Create Account'}
                 </Heading>
-                <Text color="gray.600">College Placement Management System</Text>
+                <Text color="black" fontSize="sm">College Placement Management System</Text>
               </VStack>
 
               {/* Toggle buttons */}
@@ -211,24 +211,32 @@ function Login({ onLogin }) {
                 <form onSubmit={handleLoginSubmit}>
                   <VStack spacing={4}>
                     <FormControl isRequired>
-                      <FormLabel color="black">Email</FormLabel>
+                      <FormLabel color="black" fontWeight="medium">Email</FormLabel>
                       <Input
                         type="email"
                         placeholder="student@nfsu.ac.in"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        focusBorderColor="gray.400"
+                        focusBorderColor="black"
+                        borderColor="gray.300"
+                        bg="white"
+                        color="black"
+                        _placeholder={{ color: 'gray.400' }}
                       />
                     </FormControl>
 
                     <FormControl isRequired>
-                      <FormLabel color="black">Password</FormLabel>
+                      <FormLabel color="black" fontWeight="medium">Password</FormLabel>
                       <Input
                         type="password"
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        focusBorderColor="gray.400"
+                        focusBorderColor="black"
+                        borderColor="gray.300"
+                        bg="white"
+                        color="black"
+                        _placeholder={{ color: 'gray.400' }}
                       />
                     </FormControl>
 
@@ -251,64 +259,88 @@ function Login({ onLogin }) {
                   <VStack spacing={4}>
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} width="100%">
                       <FormControl isRequired>
-                        <FormLabel color="black">Full Name</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Full Name</FormLabel>
                         <Input
                           placeholder="Enter your full name"
                           value={regData.fullName}
                           onChange={(e) => handleRegInputChange('fullName', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Email</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Email</FormLabel>
                         <Input
                           type="email"
                           placeholder="student@nfsu.ac.in"
                           value={regData.email}
                           onChange={(e) => handleRegInputChange('email', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Roll Number</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Roll Number</FormLabel>
                         <Input
                           placeholder="e.g., 2021001"
                           value={regData.rollNumber}
                           onChange={(e) => handleRegInputChange('rollNumber', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel color="black">Enrollment Number</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Enrollment Number</FormLabel>
                         <Input
                           placeholder="e.g., NFSU2021001"
                           value={regData.enrollmentNumber}
                           onChange={(e) => handleRegInputChange('enrollmentNumber', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Mobile Number</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Mobile Number</FormLabel>
                         <Input
                           type="tel"
                           placeholder="10-digit mobile number"
                           value={regData.mobileNumber}
                           onChange={(e) => handleRegInputChange('mobileNumber', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Gender</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Gender</FormLabel>
                         <Select
                           placeholder="Select gender"
                           value={regData.gender}
                           onChange={(e) => handleRegInputChange('gender', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         >
                           <option value="Male">Male</option>
                           <option value="Female">Female</option>
@@ -317,32 +349,44 @@ function Login({ onLogin }) {
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Course</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Course</FormLabel>
                         <Input
                           placeholder="e.g., B.Tech"
                           value={regData.course}
                           onChange={(e) => handleRegInputChange('course', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Branch</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Branch</FormLabel>
                         <Input
                           placeholder="e.g., Computer Science"
                           value={regData.branch}
                           onChange={(e) => handleRegInputChange('branch', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Current Semester</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Current Semester</FormLabel>
                         <Select
                           placeholder="Select semester"
                           value={regData.currentSemester}
                           onChange={(e) => handleRegInputChange('currentSemester', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         >
                           {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
                             <option key={sem} value={sem}>{sem}</option>
@@ -351,35 +395,47 @@ function Login({ onLogin }) {
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Year of Admission</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Year of Admission</FormLabel>
                         <Input
                           type="number"
                           placeholder="e.g., 2021"
                           value={regData.yearOfAdmission}
                           onChange={(e) => handleRegInputChange('yearOfAdmission', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Password</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Password</FormLabel>
                         <Input
                           type="password"
                           placeholder="Minimum 6 characters"
                           value={regData.password}
                           onChange={(e) => handleRegInputChange('password', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
 
                       <FormControl isRequired>
-                        <FormLabel color="black">Confirm Password</FormLabel>
+                        <FormLabel color="black" fontWeight="medium">Confirm Password</FormLabel>
                         <Input
                           type="password"
                           placeholder="Re-enter password"
                           value={regData.confirmPassword}
                           onChange={(e) => handleRegInputChange('confirmPassword', e.target.value)}
-                          focusBorderColor="gray.400"
+                          focusBorderColor="black"
+                          borderColor="gray.300"
+                          bg="white"
+                          color="black"
+                          _placeholder={{ color: 'gray.400' }}
                         />
                       </FormControl>
                     </SimpleGrid>

@@ -28,12 +28,44 @@ def get_master_profile():
     """Get master profile (read-only institutional data from admin.students_master)"""
     try:
         identity = get_jwt_identity()
-        student = StudentMaster.query.filter_by(user_id=identity['user_id']).first()
+        print(f"DEBUG: Identity received: {identity}")
+        
+        user_id = identity.get('user_id')
+        if not user_id:
+            print("ERROR: No user_id in identity")
+            return jsonify({'error': 'Invalid token - no user_id'}), 400
+        
+        print(f"DEBUG: Looking for student with user_id: {user_id}")
+        
+        # Convert user_id to string if it's a UUID object
+        if hasattr(user_id, 'hex'):
+            user_id = str(user_id)
+        
+        student = StudentMaster.query.filter_by(user_id=user_id).first()
+        
         if not student:
-            return jsonify({'error': 'Student profile not found'}), 404
+            print(f"ERROR: No student found for user_id: {user_id}")
+            # Try to find all students to debug
+            all_students = StudentMaster.query.all()
+            print(f"DEBUG: Total students in DB: {len(all_students)}")
+            if all_students:
+                print(f"DEBUG: First student user_id: {all_students[0].user_id}")
+            return jsonify({'error': 'Student profile not found in database'}), 404
+        
+        print(f"DEBUG: Found student: {student.full_name}")
+        
+        # Helper function to safely convert values
+        def safe_str(val):
+            return str(val) if val is not None else None
+        
+        def safe_float(val):
+            try:
+                return float(val) if val is not None else None
+            except:
+                return None
         
         profile_data = {
-            'student_id': str(student.student_id),
+            'student_id': safe_str(student.student_id),
             'full_name': student.full_name,
             'roll_number': student.roll_number,
             'enrollment_number': student.enrollment_number,
@@ -58,32 +90,32 @@ def get_master_profile():
             'current_semester': student.current_semester,
             'year_of_admission': student.year_of_admission,
             'year_of_passing': student.year_of_passing,
-            'cgpa': float(student.cgpa) if student.cgpa else 0.0,
-            'percentage_equivalent': float(student.percentage_equivalent) if student.percentage_equivalent else None,
-            'backlogs_count': student.backlogs_count,
-            'active_backlog': student.active_backlog,
-            'gap_in_education': student.gap_in_education,
+            'cgpa': safe_float(student.cgpa) if student.cgpa else 0.0,
+            'percentage_equivalent': safe_float(student.percentage_equivalent),
+            'backlogs_count': student.backlogs_count or 0,
+            'active_backlog': student.active_backlog or False,
+            'gap_in_education': student.gap_in_education or False,
             'gap_duration_years': student.gap_duration_years,
             'tenth_board': student.tenth_board,
             'tenth_school_name': student.tenth_school_name,
             'tenth_year_of_passing': student.tenth_year_of_passing,
-            'tenth_percentage': float(student.tenth_percentage) if student.tenth_percentage else None,
+            'tenth_percentage': safe_float(student.tenth_percentage),
             'twelfth_board': student.twelfth_board,
             'twelfth_school_name': student.twelfth_school_name,
             'twelfth_year_of_passing': student.twelfth_year_of_passing,
-            'twelfth_percentage': float(student.twelfth_percentage) if student.twelfth_percentage else None,
+            'twelfth_percentage': safe_float(student.twelfth_percentage),
             'diploma_board': student.diploma_board,
             'diploma_school_name': student.diploma_school_name,
             'diploma_year_of_passing': student.diploma_year_of_passing,
-            'diploma_percentage': float(student.diploma_percentage) if student.diploma_percentage else None,
+            'diploma_percentage': safe_float(student.diploma_percentage),
             'medium_of_instruction': student.medium_of_instruction,
-            'is_profile_verified': student.is_profile_verified,
-            'verified_by_admin_id': str(student.verified_by_admin_id) if student.verified_by_admin_id else None,
+            'is_profile_verified': student.is_profile_verified or False,
+            'verified_by_admin_id': safe_str(student.verified_by_admin_id),
             'verification_date': student.verification_date.isoformat() if student.verification_date else None,
             'verification_remarks': student.verification_remarks,
-            'profile_completion_percentage': float(student.profile_completion_percentage) if student.profile_completion_percentage else 0.0,
-            'placement_status': student.placement_status,
-            'eligible_for_placement_drives': student.eligible_for_placement_drives,
+            'profile_completion_percentage': safe_float(student.profile_completion_percentage) or 0.0,
+            'placement_status': student.placement_status or 'Not Placed',
+            'eligible_for_placement_drives': student.eligible_for_placement_drives if student.eligible_for_placement_drives is not None else True,
             'created_at': student.created_at.isoformat() if student.created_at else None,
             'updated_at': student.updated_at.isoformat() if student.updated_at else None
         }
@@ -99,53 +131,103 @@ def get_master_profile():
 @student_bp.route('/profile/editable', methods=['GET'])
 @require_student
 def get_editable_profile():
-    """Get editable profile"""
+    """Get editable profile from student.student_profiles_editable"""
     try:
         identity = get_jwt_identity()
-        student_master = StudentMaster.query.filter_by(user_id=identity['user_id']).first()
+        user_id = identity['user_id']
+        
+        # Convert user_id to string if needed
+        if hasattr(user_id, 'hex'):
+            user_id = str(user_id)
+            
+        student_master = StudentMaster.query.filter_by(user_id=user_id).first()
         if not student_master:
             return jsonify({'error': 'Student profile not found'}), 404
         
         editable = StudentProfileEditable.query.filter_by(student_id=student_master.student_id).first()
         if not editable:
-            # Create new editable profile if not exists
-            editable = StudentProfileEditable(
-                student_id=student_master.student_id,
-                user_id=identity['user_id']
-            )
-            db.session.add(editable)
-            db.session.commit()
+            # Return empty profile structure if not exists
+            return jsonify({
+                'personal_email': None,
+                'alternate_mobile_number': None,
+                'emergency_contact_number': None,
+                'linkedin_profile': None,
+                'github_profile': None,
+                'portfolio_website': None,
+                'career_objective': None,
+                'primary_skills': [],
+                'secondary_skills': [],
+                'programming_languages': [],
+                'tools_and_technologies': [],
+                'areas_of_interest': [],
+                'certifications': [],
+                'workshops_trainings': [],
+                'internships': [],
+                'projects': [],
+                'publications': [],
+                'achievements': None,
+                'extracurricular': None,
+                'languages_known': [],
+                'resume_file_path': None,
+                'photo_file_path': None,
+                'marksheet_10_upload_path': None,
+                'marksheet_12_upload_path': None,
+                'degree_certificate_upload_path': None,
+                'id_proof_upload_path': None,
+                'other_documents_upload_path': [],
+                'declaration_correctness': False,
+                'agreement_placement_rules': False,
+                'consent_share_data': False,
+                'willingness_relocation': None,
+                'willingness_bond': None,
+                'preferred_job_location': None,
+                'updated_at': None
+            }), 200
         
         profile_data = {
-            'profile_id': editable.profile_id,
+            'personal_email': editable.personal_email,
+            'alternate_mobile_number': editable.alternate_mobile_number,
+            'emergency_contact_number': editable.emergency_contact_number,
+            'linkedin_profile': editable.linkedin_profile,
+            'github_profile': editable.github_profile,
+            'portfolio_website': editable.portfolio_website,
+            'career_objective': editable.career_objective,
             'primary_skills': editable.primary_skills or [],
             'secondary_skills': editable.secondary_skills or [],
             'programming_languages': editable.programming_languages or [],
-            'tools_technologies': editable.tools_technologies or [],
-            'soft_skills': editable.soft_skills or [],
-            'languages_known': editable.languages_known or [],
-            'projects': editable.projects or [],
-            'internships': editable.internships or [],
+            'tools_and_technologies': editable.tools_and_technologies or [],
+            'areas_of_interest': editable.areas_of_interest or [],
             'certifications': editable.certifications or [],
-            'achievements': editable.achievements or [],
-            'extra_curricular': editable.extra_curricular or [],
+            'workshops_trainings': editable.workshops_trainings or [],
+            'internships': editable.internships or [],
+            'projects': editable.projects or [],
+            'publications': editable.publications or [],
+            'achievements': editable.achievements,
+            'extracurricular': editable.extracurricular,
+            'languages_known': editable.languages_known or [],
             'resume_file_path': editable.resume_file_path,
-            'profile_photo_path': editable.profile_photo_path,
-            'career_objective': editable.career_objective,
-            'linkedin_url': editable.linkedin_url,
-            'github_url': editable.github_url,
-            'portfolio_url': editable.portfolio_url,
-            'preferred_job_locations': editable.preferred_job_locations or [],
-            'preferred_job_roles': editable.preferred_job_roles or [],
-            'expected_salary_lpa': float(editable.expected_salary_lpa) if editable.expected_salary_lpa else None,
-            'last_updated_at': editable.last_updated_at.isoformat() if editable.last_updated_at else None
+            'photo_file_path': editable.photo_file_path,
+            'marksheet_10_upload_path': editable.marksheet_10_upload_path,
+            'marksheet_12_upload_path': editable.marksheet_12_upload_path,
+            'degree_certificate_upload_path': editable.degree_certificate_upload_path,
+            'id_proof_upload_path': editable.id_proof_upload_path,
+            'other_documents_upload_path': editable.other_documents_upload_path or [],
+            'declaration_correctness': editable.declaration_correctness or False,
+            'agreement_placement_rules': editable.agreement_placement_rules or False,
+            'consent_share_data': editable.consent_share_data or False,
+            'willingness_relocation': editable.willingness_relocation,
+            'willingness_bond': editable.willingness_bond,
+            'preferred_job_location': editable.preferred_job_location,
+            'updated_at': editable.updated_at.isoformat() if editable.updated_at else None
         }
         
         return jsonify(profile_data), 200
         
     except Exception as e:
         print(f"Get editable profile error: {str(e)}")
-        return jsonify({'error': 'Failed to fetch profile'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @student_bp.route('/profile/editable', methods=['PUT'])
 @require_student
