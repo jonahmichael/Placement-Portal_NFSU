@@ -258,5 +258,4 @@ For issues or questions, refer to:
 **Built with ❤️ for NFSU Placement Cell**
 
 Good luck with your placement portal development!
-#   P l a c e m e n t - P o r t a l _ N F S U  
- 
+#
